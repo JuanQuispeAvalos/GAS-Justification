@@ -1,65 +1,125 @@
-function onOpen() {
-  const ui = SpreadsheetApp.getUi();
-  const menu = ui.createMenu('AutoFill Docs');
-  menu.addItem('Create New Docs', 'createNewGoogleDocs')
-  menu.addToUi();
+//Configuración
+const colFecCrea = 1;
+const colEmail = 2
+const colApellido = 4;
+const colNombre = 5;
+const colDni = 3;
+const colCarrera = 6;
+const colCiclo = 7;
+const colUnidad = 9;
+const colFecIna = 15;
+const colMotivo = 16;
+const colEvidencia = 17;
+const colPdf = 19;
+const colEnviado = 20;
+
+//Identificaciones
+var plantillaID = "1dMFGwJRv4E5Ba0bAiPA19I6FdS8ydoVeDK47E6HFrwM";
+var pdfID = "1OWdc93-RCQOXL0JZEC2vQxVyGjEE00WU";
+var tempID = "1HV3bYbwyAc66n6tXJNB-UXZWT8k8JxS1";
+
+function generarPDFMasivo() {
+  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Datos');
+  var alumnos = hoja.getRange(2, 1, hoja.getLastRow() - 1, hoja.getLastColumn()).getValues();
+  alumnos.forEach(function (alumno, i) {
+    var estudiante = {}
+    estudiante.fecCrea = Utilities.formatDate(alumno[colFecCrea - 1], "GMT-5", "d 'de' MMMM 'del' yyyy");
+    estudiante.email = alumno[colEmail - 1];
+    estudiante.apellido = alumno[colApellido - 1];
+    estudiante.nombre = alumno[colNombre - 1];
+    estudiante.dni = alumno[colDni - 1];
+    estudiante.carrera = alumno[colCarrera - 1];
+    estudiante.ciclo = alumno[colCiclo - 1];
+    estudiante.unidad = alumno[colUnidad - 1];
+    estudiante.fecIna = Utilities.formatDate(alumno[colFecIna - 1], "GMT5", "dd/mm/yyyy");
+    estudiante.motivo = alumno[colMotivo - 1];
+    estudiante.evidencia = alumno[colEvidencia - 1];
+    if (!alumno[colPdf - 1]) {
+      var urls = generarPDF(estudiante);
+      hoja.getRange(i + 2, colPdf).setValue(urls.urlPDF);
+      estudiante.pdf = urls.urlPDF;
+      enviarMail(estudiante);
+      hoja.getRange(i + 2, colEnviado).setValue("Enviado");
+    }
+  })
 }
 
-function createNewGoogleDocs() {
-  //Este valor debe ser la identificación de su plantilla de documento 
-  const googleDocTemplate = DriveApp.getFileById('1mtCYqcxGglV8Uh9GhkbmcxtVrmWZKHAzhyuu404W82w');
-  
-  //Este valor debe ser la identificación de la carpeta donde se almacenaran los documentos
-  const destinationFolder = DriveApp.getFolderById('1-c3MxmNQupCo-i9Ldv6Ux1m1MlxxZm0C');
+function generarPDFIndividual() {
+  var hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Datos');
+  var filaActiva = SpreadsheetApp.getActiveRange().getRow();
+  var estudiante = {}
+  estudiante.fecCrea = hoja.getRange(filaActiva, colFecCrea).getDisplayValue();
+  estudiante.email = hoja.getRange(filaActiva, colEmail).getValue();
+  estudiante.apellido = hoja.getRange(filaActiva, colApellido).getValue();
+  estudiante.nombre = hoja.getRange(filaActiva, colNombre).getValue();
+  estudiante.dni = hoja.getRange(filaActiva, colDni).getValue();
+  estudiante.carrera = hoja.getRange(filaActiva, colCarrera).getValue();
+  estudiante.ciclo = hoja.getRange(filaActiva, colCiclo).getValue();
+  estudiante.unidad = hoja.getRange(filaActiva, colUnidad).getValue();
+  estudiante.fecIna = hoja.getRange(filaActiva, colFecIna).getDisplayValue();
+  estudiante.motivo = hoja.getRange(filaActiva, colMotivo).getValue();
+  estudiante.evidencia = hoja.getRange(filaActiva, colEvidencia).getValue();
+  var urls = generarPDF(estudiante);
+  hoja.getRange(filaActiva, colPdf).setValue(urls.urlPDF);
+  estudiante.pdf = urls.urlPDF;
+  enviarMail(estudiante);
+  hoja.getRange(filaActiva, colEnviado).setValue("Enviado");
+}
 
-  //Este valor debe ser la identificación de la carpeta donde se almacenaran los PDFs
-  const detionationFolderPdfs = DriveApp.getFolderById('1MPytBwARxz2U6K3TqYM3bZaWQd0KPz-a');
+function generarPDF(estudiante) {
 
-  //aqui guardamos la hoja como variable 
-  const sheet = SpreadsheetApp
-    .getActiveSpreadsheet()
-    .getSheetByName('Data')
-  
-  //Ahora obtenemos todos los valores como una matriz
-  const rows = sheet.getDataRange().getValues();
-  
-  //Empezamos a procesar cada fila de la hoja de cálculo 
-  rows.forEach(function(row, index){
-    //Aquí verificamos si esta fila son los encabezados, si es así lo saltamos 
-    if (index === 0) return;
+  //Identificaciones
+  var plantillaID = "1dMFGwJRv4E5Ba0bAiPA19I6FdS8ydoVeDK47E6HFrwM";
+  var pdfID = "1OWdc93-RCQOXL0JZEC2vQxVyGjEE00WU";
+  var tempID = "1HV3bYbwyAc66n6tXJNB-UXZWT8k8JxS1";
 
-    //Aquí comprobamos si ya se ha generado un documento mirando 'Enlace del documento', si es así lo omitimos 
-    if (row[19]) return;
+  //Conexiones
+  var archivoPlantilla = DriveApp.getFileById(plantillaID);
+  var carpetaPDF = DriveApp.getFolderById(pdfID);
+  var carpetaDocs = DriveApp.getFolderById(tempID);
+  const hoja = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Datos');
 
-    //Usando los datos de la fila en un literal de plantilla, hacemos una copia de nuestro documento de plantilla en nuestra    Carpeta de destino 
-    const copy = googleDocTemplate.makeCopy(`${row[3]}, ${row[4]} Justification` , destinationFolder)
+  //Crear Documento 
+  var copiaArchivoPlantilla = archivoPlantilla.makeCopy(carpetaDocs);
+  var copiaID = copiaArchivoPlantilla.getId();
+  var nombreDoc = "JustificaciónInasistencia" + "_" + "####-YYYY"
+  copiaArchivoPlantilla.setName(nombreDoc);
+  var doc = DocumentApp.openById(copiaID);
+  doc.setName(nombreDoc);
 
-    //Una vez que tenemos la copia, la abrimos usando DocumentApp 
-    const doc = DocumentApp.openById(copy.getId())
+  //Remplazar variables
+  doc.getBody().replaceText('{{last_name}}', estudiante.apellido);
+  doc.getBody().replaceText('{{name}}', estudiante.nombre);
+  doc.getBody().replaceText('{{ciclo}}', estudiante.ciclo);
+  doc.getBody().replaceText('{{date}}', estudiante.fecIna);
+  doc.getBody().replaceText('{{reason}}', estudiante.motivo);
+  doc.getBody().replaceText('{{carrera}}', estudiante.carrera);
+  doc.getBody().replaceText('{{unidad}}', estudiante.unidad);
+  doc.getBody().replaceText('{{evidence}}', estudiante.evidencia);
+  doc.getBody().replaceText('{{dni}}', estudiante.dni);
+  doc.getBody().replaceText('{{creationdate}}', estudiante.fecCrea);
 
-    //Todo el contenido vive en el cuerpo, así que lo obtenemos para editarlo 
-    const body = doc.getBody();
+  doc.saveAndClose();
 
-    //En esta línea, hacemos un formato de fecha 
-    const friendlyDate = new Date(row[6]).toLocaleDateString();
-    
-    //En estas líneas, reemplazamos nuestros tokens de reemplazo con valores de nuestra fila de hoja de cálculo 
-    body.replaceText('{{last_name}}', row[3]);
-    body.replaceText('{{name}}', row[4]);
-    body.replaceText('{{ciclo}}', row[5]);
-    body.replaceText('{{date}}', friendlyDate);
-    body.replaceText('{{reason}}', row[9]);
-    body.replaceText('{{dni}}', row[2]);
-    
-    //Hacemos permanentes nuestros cambios guardando y cerrando el documento 
-    doc.saveAndClose();
+  const pdfBlob = copiaArchivoPlantilla.getAs(MimeType.PDF);
+  var PDFcreado = carpetaPDF.createFile(pdfBlob);
+  PDFcreado.addViewer(estudiante.email);
+  var urls = {}
+  urls.urlPDF = PDFcreado.getUrl();
+  urls.urlDoc = doc.getUrl();
+  return urls
+}
 
-    //Almacenar la url de nuestro nuevo documento en una variable 
-    const url = doc.getUrl();
+function enviarMail(estudiante) {
+  var mensaje = "Justificación de inasistencia a la clase de la Unidad Didáctica " +estudiante.unidad +" Descárgalo aquí " +estudiante.pdf
+  MailApp.sendEmail(estudiante.email, "JUSTIFICACIÓN DE INASISTENCIA Nº ####-YYYY", mensaje)
 
-    //Escriba ese valor de nuevo en la columna 'Enlace del documento' en la hoja de cálculo. 
-    sheet.getRange(index + 1, 20).setValue(url)
-    
-  })
-  
+}
+
+function onOpen() {
+  var ui = SpreadsheetApp.getUi();
+  var menu = ui.createMenu("Reportes");
+  menu.addItem("Generar Justificación", "generarPDFIndividual")
+    .addItem("Generar Justificación masiva", "generarPDFMasivo")
+    .addToUi();
 }
